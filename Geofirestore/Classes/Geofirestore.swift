@@ -80,8 +80,9 @@ public class GeoFirestore {
         if CLLocationCoordinate2DIsValid(location.coordinate) {
             let lat = location.coordinate.latitude
             let lon = location.coordinate.longitude
+            let geopoint = GeoPoint(latitude: lat, longitude: lon)
             if let geoHash = GFGeoHash(location: location.coordinate).geoHashValue {
-                self.collectionRef.document(documentID).setData(["l": [lat, lon], "g": geoHash], mergeFields: ["g", "l"], completion: completion)
+                self.collectionRef.document(documentID).setData(["l": geopoint, "g": geoHash], mergeFields: ["g", "l"], completion: completion)
             }
             else {
                 print("GEOFIRESTORE ERROR: Couldn't calculate geohash.")
@@ -111,8 +112,8 @@ public class GeoFirestore {
      */
     public func getLocation(forDocumentWithID documentID: String, callback: GFSGeoPointCallback? = nil) {
         self.collectionRef.document(documentID).getDocument { (snap, err) in
-            let l = snap?.get("l") as? [Double?]
-            if let lat = l?[0], let lon = l?[1] {
+            let l = snap?.get("l") as? GeoPoint
+            if let lat = l?.latitude, let lon = l?.longitude {
                 let geoPoint = GeoPoint(latitude: lat, longitude: lon)
                 callback?(geoPoint, err)
             }
@@ -129,8 +130,8 @@ public class GeoFirestore {
      */
     public func getLocation(forDocumentWithID documentID: String, callback: GFSLocationCallback? = nil) {
         self.collectionRef.document(documentID).getDocument { (snap, err) in
-            let l = snap?.get("l") as? [Double?]
-            if let lat = l?[0], let lon = l?[1] {
+            let l = snap?.get("l") as? GeoPoint
+            if let lat = l?.latitude, let lon = l?.longitude {
                 let loc = CLLocation(latitude: lat, longitude: lon)
                 callback?(loc, err)
             }
@@ -206,11 +207,6 @@ public class GFSQuery {
      */
     public var geoFirestore: GeoFirestore
     
-    /**
-     * Limits the number of results from our Query
-     */
-    public var searchLimit: Int?
-    
     internal var locationInfos = [String: GFSQueryLocationInfo]()
     internal var queries = Set<GFGeoHashQuery>()
     internal var handles = [GFGeoHashQuery: GFSGeoHashQueryListener]()
@@ -232,11 +228,7 @@ public class GFSQuery {
     }
     
     internal func fireStoreQueryForGeoHashQuery(query: GFGeoHashQuery) -> Query {
-        var query = self.geoFirestore.collectionRef.order(by: "g").whereField("g", isGreaterThanOrEqualTo: query.startValue).whereField("g", isLessThanOrEqualTo: query.endValue)
-        if let limit = self.searchLimit {
-            query = query.limit(to: limit)
-        }
-        return query
+        return self.geoFirestore.collectionRef.order(by: "g").whereField("g", isGreaterThanOrEqualTo: query.startValue).whereField("g", isLessThanOrEqualTo: query.endValue)
     }
     
     //overriden
@@ -299,8 +291,8 @@ public class GFSQuery {
         let lockQueue = DispatchQueue(label: "self")
         lockQueue.sync {
             
-            let l = snapshot?.get("l") as? [Double?]
-            if let lat = l?[0], let lon = l?[1], let key = snapshot?.documentID {
+            let l = snapshot?.get("l") as? GeoPoint
+            if let lat = l?.latitude, let lon = l?.longitude, let key = snapshot?.documentID {
                 let location = CLLocation(latitude: lat, longitude: lon)
                 updateLocationInfo(location, forKey: key)
             }else{
@@ -314,8 +306,8 @@ public class GFSQuery {
         let lockQueue = DispatchQueue(label: "self")
         lockQueue.sync {
             
-            let l = snapshot?.get("l") as? [Double?]
-            if let lat = l?[0], let lon = l?[1], let key = snapshot?.documentID {
+            let l = snapshot?.get("l") as? GeoPoint
+            if let lat = l?.latitude, let lon = l?.longitude, let key = snapshot?.documentID {
                 let location = CLLocation(latitude: lat, longitude: lon)
                 updateLocationInfo(location, forKey: key)
             }else{
@@ -335,8 +327,8 @@ public class GFSQuery {
                 let key = snapshot.documentID
                 info = locationInfos[key]
                 if info != nil{
-                    let l = snapshot.get("l") as? [Double?]
-                    if let lat = l?[0], let lon = l?[1]{
+                    let l = snapshot.get("l") as? GeoPoint
+                    if let lat = l?.latitude, let lon = l?.longitude{
                         let location = CLLocation(latitude: lat, longitude: lon)
                         let geoHash = GFGeoHash(location: location.coordinate)
                         // Only notify observers if key is not part of any other geohash query or this actually might not be
